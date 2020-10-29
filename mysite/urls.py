@@ -20,8 +20,10 @@ import locations
 
 urlpatterns = [
     path('api/', include('locations.urls')),
-    path(r'api/store/<str:person_id>', locations.views.store),
-    path(r'api/get/<str:person_id>/<int:time_sub>', locations.views.display),
+    path('api/store/<str:person_id>/<str:tracked_id>/<int:timestamp>', locations.views.store_get),
+    path('api/store/<str:person_id>/<str:tracked_id>', locations.views.store_get),
+    path('api/store/<str:person_id>', locations.views.store),
+    path('api/get/<str:person_id>/<int:time_sub>', locations.views.track),
     path('api/test', locations.views.test),
     path('api/locations/all', locations.views.known_locations),
     path('api/locations/store', locations.views.store_known_locations),

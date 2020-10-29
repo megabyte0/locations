@@ -18,4 +18,7 @@ class KnownLocation(models.Model):
     longitude = models.FloatField()
     name = models.CharField(max_length=255)
 
-
+class TrackStatus(models.Model):
+    who = models.CharField(max_length=30,db_index=True)
+    whom = models.CharField(max_length=30,db_index=True)
+    timestamp = models.BigIntegerField(db_index=True)

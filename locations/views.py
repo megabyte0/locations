@@ -4,36 +4,70 @@ from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Max
-from locations.models import Location, KnownLocation
+from locations.models import Location, KnownLocation, TrackStatus
 import json
 DEBUG = True
 #DEBUG = False
 
 @csrf_exempt
 def store(request,person_id):
+    return JsonResponse(store_inner(request,person_id),safe=False)
+    #HttpResponse("Hello, %s. You're at the polls index. '%s'"%(person_id,request.body))
+
+def store_inner(request,person_id):
     global DEBUG
     if (not DEBUG):
         timestamps=[]
     else:
-        args = Location.objects.filter(owner=person_id)
-        timestamps=[i.timestamp for i in args]
+        locations = Location.objects.filter(owner=person_id)
+        timestamps=[i.timestamp for i in locations]
     locations=json.loads(request.body)
     for i in range(len(locations)):
         locations[i].update({'owner':person_id})
-    to_store = [Location(**i) for i in locations if i['timestamp'] not in timestamps]
+    to_store = [
+        Location(**i)
+        for i in locations
+        if i['timestamp'] not in timestamps
+        ]
     Location.objects.bulk_create(to_store)
     res=[i['timestamp'] for i in locations]
-    return JsonResponse(res,safe=False)
-    #HttpResponse("Hello, %s. You're at the polls index. '%s'"%(person_id,request.body))
+    return res
 
-def display(request,person_id,time_sub):
-    args = Location.objects.filter(owner=person_id)
-    max_time = args.aggregate(Max('timestamp'))['timestamp__max']
+def store_get(request,person_id,tracked_id,timestamp=None):
+    stored = store_inner(request,person_id)
+    if timestamp:
+        update = track_inner(None,tracked_id,timestamp+1)
+        TrackStatus.objects.bulk_create([
+            TrackStatus(
+                who=person_id,whom=tracked_id,
+                timestamp=i['timestamp'])
+            for i in update
+            ])
+        return JsonResponse({"stored":stored,"update":update})
+    subquery = TrackStatus.objects.filter(
+        who=person_id,
+        whom=tracked_id
+        ).values('timestamp')
+    update = track_inner(None,tracked_id,None,subquery)
+    return JsonResponse({"stored":stored,"update":update})
+
+def track(request,person_id,time_sub):
+    locations = Location.objects.filter(owner=person_id)
+    max_time = locations.aggregate(Max('timestamp'))['timestamp__max']
     #return JsonResponse(max_time)
     if max_time == None:
         return JsonResponse([],safe=False)
     start_time = max_time - time_sub * 1000
-    res = args.filter(timestamp__gte=start_time)
+    return JsonResponse(track_inner(locations,person_id,start_time),safe=False)
+
+def track_inner(locations,person_id,start_time=None,excluded=[]):
+    if locations == None:
+        locations = Location.objects.filter(owner=person_id)
+    res = locations
+    if start_time != None:
+        res = res.filter(timestamp__gte=start_time)
+    if excluded:
+        res=res.exclude(timestamp__in=excluded)##
     res = [{
     'latitude': i.latitude,
     'longitude': i.longitude,
@@ -46,7 +80,7 @@ def display(request,person_id,time_sub):
     'timestamp': i.timestamp,
     'owner': i.owner
     } for i in res]
-    return JsonResponse(res,safe=False)
+    return res    
 
 @csrf_exempt
 def test(request):
