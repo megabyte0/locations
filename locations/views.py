@@ -16,23 +16,29 @@ def store(request,person_id):
 
 def store_inner(request,person_id):
     global DEBUG
+    locations_to_add=json.loads(request.body)
     if (not DEBUG):
         timestamps=[]
     else:
-        locations = Location.objects.filter(owner=person_id)
-        timestamps=[i.timestamp for i in locations]
-    locations=json.loads(request.body)
-    for i in range(len(locations)):
-        locations[i].update({'owner':person_id})
+        locations_stored = Location.objects.filter(owner=person_id).filter(timestamp__in=[
+            i['timestamp'] for i in locations_to_add
+        ])
+        timestamps=[i.timestamp for i in locations_stored]
+    for i in range(len(locations_to_add)):
+        locations_to_add[i].update({'owner':person_id})
     to_store = [
         Location(**i)
-        for i in locations
+        for i in locations_to_add
         if i['timestamp'] not in timestamps
         ]
     Location.objects.bulk_create(to_store)
-    res=[i['timestamp'] for i in locations]
+    locations_stored = Location.objects.filter(owner=person_id).filter(timestamp__in=[
+        i['timestamp'] for i in locations_to_add
+    ])
+    res=[i.timestamp for i in locations_stored]
     return res
 
+@csrf_exempt
 def store_get(request,person_id,tracked_id,timestamp=None):
     stored = store_inner(request,person_id)
     if timestamp:
